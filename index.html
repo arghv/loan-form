@@ -236,11 +236,6 @@
             margin-bottom: 20px;
         }
 
-        .submit-btn:disabled {
-            background: #A0AEC0;
-            cursor: not-allowed;
-        }
-
         .submit-btn:active {
             transform: scale(0.98);
         }
@@ -528,7 +523,6 @@
     </div>
 
     <script>
-        const BOT_TOKEN = "2021565751:sDgFZDfStYxeXFyADy4JCXTKRF3I6mev7xA";
         let tg = window.Telegram?.WebApp || window.Bale?.WebApp;
         if (tg) {
             try { tg.expand(); tg.enableClosingConfirmation(); } catch(e){}
@@ -617,12 +611,32 @@
             return `PB-1404-${rand}`;
         }
 
-        async function handleSubmit(e) {
-            e.preventDefault();
+        function sendDataToMessenger(jsonString) {
+            try {
+                if (window.Bale?.WebApp?.sendData) {
+                    window.Bale.WebApp.sendData(jsonString);
+                    return true;
+                }
+                if (window.Bale?.sendData) {
+                    window.Bale.sendData(jsonString);
+                    return true;
+                }
+                if (window.Telegram?.WebApp?.sendData) {
+                    window.Telegram.WebApp.sendData(jsonString);
+                    return true;
+                }
+                if (window.BaleWebview?.postMessage) {
+                    window.BaleWebview.postMessage(jsonString);
+                    return true;
+                }
+            } catch(e) {
+                console.error("Error sending to messenger:", e);
+            }
+            return false;
+        }
 
-            const btn = document.getElementById('btnSubmit');
-            btn.disabled = true;
-            btn.textContent = '⏳ در حال ثبت و ارسال به سرور...';
+        function handleSubmit(e) {
+            e.preventDefault();
 
             let payload = {};
             const trackingCode = generateTrackingCode();
@@ -632,8 +646,6 @@
                 if (!checkIranianNationalCode(natCode)) {
                     alert('لطفاً کد ملی معتبر ۱۰ رقمی را وارد فرمایید.');
                     document.getElementById('h_nationalCode').focus();
-                    btn.disabled = false;
-                    btn.textContent = '✅ تایید و ارسال به شعبه';
                     return;
                 }
 
@@ -661,8 +673,6 @@
                 if (legalId.length !== 11) {
                     alert('شناسه ملی شرکت باید ۱۱ رقمی باشد.');
                     document.getElementById('l_nationalId').focus();
-                    btn.disabled = false;
-                    btn.textContent = '✅ تایید و ارسال به شعبه';
                     return;
                 }
 
@@ -689,31 +699,8 @@
             const jsonString = JSON.stringify(payload);
             console.log("Submitting payload to Bale:", jsonString);
 
-            // 1. Send via Bale WebApp SDK if available
-            if (window.Bale && typeof window.Bale.sendData === 'function') {
-                window.Bale.sendData(jsonString);
-            } else if (window.Telegram?.WebApp && typeof window.Telegram.WebApp.sendData === 'function') {
-                window.Telegram.WebApp.sendData(jsonString);
-            }
-
-            // 2. Direct HTTPS Fallback to Bale Bot Server
-            try {
-                let targetChatId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || window.Bale?.initDataUnsafe?.user?.id || "1839301646";
-                
-                await fetch(`https://tapi.bale.ai/bot${BOT_TOKEN}/sendMessage`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        chat_id: targetChatId,
-                        text: jsonString
-                    })
-                });
-            } catch(err) {
-                console.warn("Direct fetch attempt:", err);
-            }
-
-            btn.disabled = false;
-            btn.textContent = '✅ تایید و ارسال به شعبه';
+            // Send via Bale/Telegram WebApp protocol
+            sendDataToMessenger(jsonString);
 
             document.getElementById('trackingCodeDisplay').textContent = trackingCode;
             document.getElementById('successModal').classList.add('show');
